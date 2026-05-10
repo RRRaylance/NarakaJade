@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>征神之路·洗玉模拟器(精确对齐版)</title>
+    <style>
+        :root {
+            --bg-color: #0e0e0e;
+            --card-bg: #1a1a1a;
+            --gold: #d4af37;
+            --purple: #b388ff;
+            --rare-red: #ff4d4d;
+            --text-white: #ffffff;
+            --text-gray: #888888;
+            --row-height: 34px; /* 统一行高 */
+        }
+        body { background-color: var(--bg-color); color: var(--text-white); font-family: "Microsoft YaHei", sans-serif; padding: 0; margin: 0; }
+        
+        /* 顶部统计栏 */
+        .header-stats {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(26, 26, 26, 0.95);
+            border-bottom: 2px solid var(--gold);
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            backdrop-filter: blur(10px);
+        }
+        .stat-total-item { font-size: 1.2em; font-weight: bold; }
+        .stat-total-label { color: var(--gold); margin-right: 10px; }
+        .stat-total-val { color: var(--rare-red); }
+
+        h1 { text-align: center; color: var(--gold); margin: 20px 0; }
+        
+        .jade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        .jade-card { background: var(--card-bg); border: 1px solid #333; border-radius: 4px; padding: 15px; position: relative; border-top: 3px solid var(--gold); }
+        .jade-header { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+        .jade-name { font-weight: bold; color: var(--gold); }
+
+        /* 核心对齐逻辑：属性行和开孔按钮高度一致 */
+        .stat-list { margin-bottom: 10px; }
+        
+        .stat-row { 
+            display: flex; 
+            align-items: center; 
+            height: var(--row-height); 
+            margin: 4px 0; 
+            box-sizing: border-box;
+        }
+
+        .unlock-btn { 
+            width: 100%; 
+            height: var(--row-height); 
+            margin: 4px 0;
+            background: transparent; 
+            border: 1px dashed #555; 
+            color: #777; 
+            cursor: pointer; 
+            border-radius: 4px; 
+            font-size: 0.85em;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .unlock-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(212,175,55,0.05); }
+
+        .btn-group { display: flex; gap: 4px; margin-right: 10px; }
+        .icon-btn { cursor: pointer; background: #333; border: none; color: #fff; border-radius: 3px; padding: 2px 6px; font-size: 12px; height: 24px; }
+        .icon-btn:hover { background: #555; }
+        
+        .stat-content { flex: 1; font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-basic { color: var(--text-white); }
+        .stat-rare { color: var(--rare-red); font-weight: bold; }
+        .stat-max-val { color: var(--text-gray); font-size: 0.85em; margin-left: 5px; }
+
+        .element-row { 
+            height: var(--row-height);
+            margin-top: 10px; 
+            padding-top: 10px; 
+            border-top: 1px dashed #444; 
+            color: var(--purple); 
+            font-weight: bold; 
+            display: flex; 
+            align-items: center; 
+        }
+        
+        .action-footer { margin-top: 15px; border-top: 1px solid #333; padding-top: 10px; text-align: center; }
+        .btn-refresh { 
+            background: transparent; 
+            color: var(--gold); 
+            border: 1px solid #444; 
+            padding: 5px 0; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 1.4em; 
+            width: 100%; 
+            transition: 0.2s;
+            line-height: 1;
+        }
+        .btn-refresh:hover { background: #222; border-color: var(--gold); transform: rotate(180deg); }
+
+        /* 弹窗样式 */
+        #modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; border: 1px solid var(--gold); padding: 15px; z-index: 1000; max-height: 80vh; overflow-y: auto; width: 280px; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; }
+        .option-item { padding: 12px; border-bottom: 1px solid #333; cursor: pointer; }
+        .option-item:hover { background: #333; color: var(--gold); }
+    </style>
+</head>
+<body>
+
+    <div class="header-stats" id="totalStats">
+        <div class="stat-total-item"><span class="stat-total-label">化气总计:</span><span class="stat-total-val" id="total-huaqi">+0%</span></div>
+        <div class="stat-total-item"><span class="stat-total-label">火正总计:</span><span class="stat-total-val" id="total-huozheng">+0</span></div>
+    </div>
+
+    <h1>征神之路 · 魂玉洗炼模拟</h1>
+    <div class="jade-grid" id="jadeContainer"></div>
+
+    <div class="modal-overlay" id="overlay" onclick="closeModal()"></div>
+    <div id="modal">
+        <h3 style="color:var(--gold); margin: 0 0 10px 0; font-size: 1.1em;">选择词条</h3>
+        <div id="optionsList"></div>
+    </div>
+
+<script>
+    const BASIC_STATS = [
+        { name: "体力", max: 15, unit: "%" }, { name: "攻击", max: 4, unit: "%" },
+        { name: "护甲", max: 200, unit: "" }, { name: "近抗", max: 4, unit: "%" },
+        { name: "远抗", max: 10, unit: "%" }, { name: "罡气伤害", max: 4, unit: "%" },
+        { name: "蓄力攻击伤害", max: 4, unit: "%" }, { name: "非蓄力攻击伤害", max: 4, unit: "%" },
+        { name: "蓄力罡气伤害", max: 8, unit: "%" }, { name: "非蓄力罡气伤害", max: 8, unit: "%" },
+        { name: "对首领伤害增加", max: 5, unit: "%" }, { name: "对非首领伤害增加", max: 5, unit: "%" },
+        { name: "受到首领伤害减免", max: 5, unit: "%" }, { name: "受到非首领伤害减免", max: 5, unit: "%" },
+        { name: "冰爆伤害", max: 30, unit: "%" }, { name: "天雷伤害", max: 30, unit: "%" },
+        { name: "毒爆伤害", max: 30, unit: "%" }, { name: "振刀触发恢复", max: 200, unit: "" }
+    ];
+
+    const RARE_STATS = [
+        { name: "【合道】", values: [30, 40, 50], unit: "%" },
+        { name: "【化气】", values: [15, 20, 25], unit: "%" },
+        { name: "【火正】", values: [1, 2, 3], unit: "" }
+    ];
+
+    const ELEMENTS = ["御冰", "御电", "御毒"];
+    const JADE_NAMES = ["连续冰爆", "爆冰诀", "冰渊爆", "元素奔涌", "凛霜刺", "霜冻唤斩", "夺魂"];
+
+    let jades = [];
+    let currentModalTarget = { jadeId: null, statIdx: null, type: null };
+
+    function init() {
+        for (let i = 0; i < 7; i++) {
+            jades.push(generateJade(i));
+        }
+        render();
+    }
+
+    function generateJade(id) {
+        let pool = [...BASIC_STATS].sort(() => 0.5 - Math.random());
+        let tempStats = pool.slice(0, 3);
+        let highRollIdx = Math.floor(Math.random() * 3);
+        
+        let stats = tempStats.map((template, idx) => {
+            let ratio = (idx === highRollIdx) ? (0.9 + Math.random() * 0.1) : [0.2, 0.25, 0.3, 0.35, 0.4][Math.floor(Math.random() * 5)];
+            return { isRare: false, name: template.name, max: template.max, unit: template.unit, ratio: ratio, value: (template.max * ratio) };
+        });
+        stats.push(null); 
+        return { id: id, name: JADE_NAMES[id], element: "御冰", stats: stats };
+    }
+
+    function render() {
+        const container = document.getElementById('jadeContainer');
+        container.innerHTML = '';
+        
+        let totalRare = { "【化气】": 0, "【火正】": 0 };
+
+        jades.forEach(jade => {
+            const card = document.createElement('div');
+            card.className = 'jade-card';
+            
+            let statsHtml = jade.stats.map((s, idx) => {
+                // 开孔按钮使用与 stat-row 一致的高度和外边距
+                if (!s) return `<button class="unlock-btn" onclick="unlockSlot(${jade.id})">使用3藏灵玉开孔</button>`;
+                
+                if (s.isRare && totalRare.hasOwnProperty(s.name)) {
+                    totalRare[s.name] += s.value;
+                }
+
+                const valDisplay = s.value % 1 === 0 ? s.value : s.value.toFixed(1);
+                return `
+                    <div class="stat-row">
+                        <div class="btn-group">
+                            <button class="icon-btn" onclick="recastStat(${jade.id}, ${idx})">🎲</button>
+                            <button class="icon-btn" onclick="openSelectModal(${jade.id}, ${idx}, 'stat')">▼</button>
+                        </div>
+                        <div class="stat-content ${s.isRare ? 'stat-rare' : 'stat-basic'}">
+                            ${s.name} +${valDisplay}${s.unit}
+                            ${s.isRare ? '' : `<span class="stat-max-val">(+${s.max}${s.unit})</span>`}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            card.innerHTML = `
+                <div class="jade-header"><span class="jade-name">${jade.name}</span></div>
+                <div class="stat-list">${statsHtml}</div>
+                <div class="element-row">
+                    <button class="icon-btn" style="margin-right:10px" onclick="openSelectModal(${jade.id}, null, 'element')">▼</button>
+                    ${jade.element} +1
+                </div>
+                <div class="action-footer">
+                    <button class="btn-refresh" title="再来一块" onclick="refreshJade(${jade.id})">↻</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        document.getElementById('total-huaqi').innerText = `+${totalRare["【化气】"]}%`;
+        document.getElementById('total-huozheng').innerText = `+${totalRare["【火正】"]}`;
+    }
+
+    function recastStat(jadeId, statIdx) {
+        let old = jades[jadeId].stats[statIdx];
+        let next = BASIC_STATS[Math.floor(Math.random() * BASIC_STATS.length)];
+        let ratio = old.isRare ? (0.2 + Math.random() * 0.4) : old.ratio;
+        jades[jadeId].stats[statIdx] = { isRare: false, name: next.name, max: next.max, unit: next.unit, ratio: ratio, value: (next.max * ratio) };
+        render();
+    }
+
+    function openSelectModal(jadeId, statIdx, type) {
+        currentModalTarget = { jadeId, statIdx, type };
+        const list = document.getElementById('optionsList');
+        list.innerHTML = '';
+        
+        if (type === 'element') {
+            ELEMENTS.forEach(el => {
+                const d = document.createElement('div'); d.className = 'option-item'; d.innerText = el + " +1";
+                d.onclick = () => { jades[jadeId].element = el; closeModal(); render(); };
+                list.appendChild(d);
+            });
+        } else {
+            RARE_STATS.forEach(r => {
+                const d = document.createElement('div'); d.className = 'option-item stat-rare'; d.innerText = r.name;
+                d.onclick = () => {
+                    let val = r.values[Math.floor(Math.random() * r.values.length)];
+                    jades[jadeId].stats[statIdx] = { isRare: true, name: r.name, value: val, unit: r.unit };
+                    closeModal(); render();
+                };
+                list.appendChild(d);
+            });
+            BASIC_STATS.forEach(b => {
+                const d = document.createElement('div'); d.className = 'option-item'; d.innerText = b.name;
+                d.onclick = () => {
+                    let old = jades[jadeId].stats[statIdx];
+                    let ratio = (old && !old.isRare) ? old.ratio : (0.2 + Math.random() * 0.3);
+                    jades[jadeId].stats[statIdx] = { isRare: false, name: b.name, max: b.max, unit: b.unit, ratio: ratio, value: (b.max * ratio) };
+                    closeModal(); render();
+                };
+                list.appendChild(d);
+            });
+        }
+        document.getElementById('modal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+    }
+
+    function unlockSlot(jadeId) {
+        let b = BASIC_STATS[Math.floor(Math.random() * BASIC_STATS.length)];
+        jades[jadeId].stats[3] = { isRare: false, name: b.name, max: b.max, unit: b.unit, ratio: 0.2 + Math.random() * 0.2, value: (b.max * (0.2 + Math.random() * 0.2)) };
+        render();
+    }
+
+    function closeModal() { document.getElementById('modal').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; }
+    function refreshJade(id) { jades[id] = generateJade(id); render(); }
+
+    init();
+</script>
+</body>
+</html>
